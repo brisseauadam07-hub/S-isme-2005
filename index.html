@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fr">
+<button onclick="window.open('https://brisseauadam07-hub.github.io/S-isme-2005/', '_blank')">
+    Ouvrir la carte dans un nouvel onglet
+</button>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Séismes dans le monde en 2005</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map { height: 500px; width: 100%; margin: 20px 0; }
+        .container { margin: 15px; font-family: Arial, sans-serif; }
+        #status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .filter-container {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        input, select, button {
+            padding: 8px;
+            margin-right: 5px;
+        }
+        input[type="number"] {
+            width: 60px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Séismes dans le monde en 2005</h1>
+        <p>Carte interactive des séismes de magnitude supérieure à 4 en 2005.</p>
+
+        <div id="status">Chargement des données...</div>
+
+        <h2>Filtres</h2>
+        <div class="filter-container">
+            <div class="filter-group">
+                <label for="min-mag">Magnitude min :</label>
+                <input type="number" id="min-mag" placeholder="Ex: 2" step="0.1" min="4" value="4">
+                <label for="max-mag">Magnitude max :</label>
+                <input type="number" id="max-mag" placeholder="Ex: 8" step="0.1" min="4">
+                <small>(Laissez max vide pour "≥ min")</small>
+            </div>
+
+            <div class="filter-group">
+                <label for="continent-filter">Continent :</label>
+                <select id="continent-filter">
+                    <option value="all">Tous</option>
+                    <option value="Asie">Asie</option>
+                    <option value="Amérique">Amérique</option>
+                    <option value="Europe">Europe</option>
+                    <option value="Afrique">Afrique</option>
+                    <option value="Océanie">Océanie</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="start-date">Date de début :</label>
+                <input type="date" id="start-date">
+                <label for="end-date">Date de fin :</label>
+                <input type="date" id="end-date">
+            </div>
+
+            <button onclick="filterEarthquakes()">Appliquer les filtres</button>
+        </div>
+
+        <h2>Carte interactive</h2>
+        <div id="map"></div>
+
+        <h2>Liste des séismes</h2>
+        <table id="earthquakes">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Magnitude</th>
+                    <th>Localisation</th>
+                    <th>Profondeur (km)</th>
+                </tr>
+            </thead>
+            <tbody id="eq-table-body">
+                <!-- Les données seront ajoutées ici -->
+            </tbody>
+        </table>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Initialisation de la carte
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+
+        // Données des séismes (sera rempli après chargement)
+        let allEarthquakes = [];
+
+        // Fonction pour obtenir une couleur en fonction de la magnitude
+        function getColor(magnitude) {
+            if (magnitude > 7) return '#ff0000';      // Rouge pour les séismes très forts
+            else if (magnitude > 5) return '#ff8c00'; // Orange pour les séismes forts
+            else return '#ffcc00';                     // Jaune pour les séismes modérés
+        }
+
+        // Fonction pour obtenir la taille du marqueur
+        function getMarkerSize(magnitude) {
+            return Math.max(magnitude * 1.5, 3); // Taille minimale de 3
+        }
+
+        // Fonction pour afficher les séismes
+        function displayEarthquakes(earthquakes) {
+            // Effacer les marqueurs existants
+            map.eachLayer(layer => {
+                if (layer instanceof L.CircleMarker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            const tableBody = document.getElementById('eq-table-body');
+            tableBody.innerHTML = '';
+
+            earthquakes.forEach(eq => {
+                const markerSize = getMarkerSize(eq.mag);
+                const markerColor = getColor(eq.mag);
+
+                L.circleMarker([eq.lat, eq.lon], {
+                    radius: markerSize,
+                    fillColor: markerColor,
+                    color: "#000",
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map)
+                .bindPopup(`<b>${eq.location}</b><br>Magnitude: ${eq.mag}<br>Date: ${eq.date}<br>Profondeur: ${eq.depth} km`);
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${eq.date}</td>
+                    <td>${eq.mag}</td>
+                    <td>${eq.location}</td>
+                    <td>${eq.depth}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = `${earthquakes.length} séismes affichés.`;
+            statusElement.className = "success";
+        }
+
+        // Fonction pour déterminer le continent à partir des coordonnées (simplifié)
+        function getContinent(lat, lon) {
+            if (lon >= -20 && lon <= 60 && lat >= -40 && lat <= 45) return "Afrique";
+            if (lon >= 60 && lon <= 180 && lat >= -10 && lat <= 50) return "Asie";
+            if (lon >= -180 && lon <= -50 && lat >= -60 && lat <= 80) return "Amérique";
+            if (lon >= -20 && lon <= 50 && lat >= 35 && lat <= 70) return "Europe";
+            if (lon >= 100 && lon <= 180 && lat >= -50 && lat <= -10) return "Océanie";
+            return "Inconnu";
+        }
+
+        // Fonction pour filtrer les séismes
+        function filterEarthquakes() {
+            const minMagInput = document.getElementById('min-mag').value;
+            const maxMagInput = document.getElementById('max-mag').value;
+            const continentFilter = document.getElementById('continent-filter').value;
+            const startDateInput = document.getElementById('start-date').value;
+            const endDateInput = document.getElementById('end-date').value;
+
+            const minMag = minMagInput ? parseFloat(minMagInput) : 2;
+            const maxMag = maxMagInput ? parseFloat(maxMagInput) : Infinity;
+
+            const filteredEarthquakes = allEarthquakes.filter(eq => {
+                const magCondition = eq.mag >= minMag && eq.mag <= maxMag;
+                const continentCondition = continentFilter === 'all' || eq.continent === continentFilter;
+
+                // Vérifie les dates si elles sont spécifiées
+                const dateCondition = (!startDateInput || eq.date >= startDateInput) &&
+                                      (!endDateInput || eq.date <= endDateInput);
+
+                return magCondition && continentCondition && dateCondition;
+            });
+
+            displayEarthquakes(filteredEarthquakes);
+        }
+
+        // Fonction pour charger les données depuis ton fichier GeoJSON
+        async function loadEarthquakeData() {
+            const fileUrl = 'https://brisseauadam07-hub.github.io/S-isme-2005/earthquakes_2005.geojson';
+            const statusElement = document.getElementById('status');
+
+            try {
+                statusElement.textContent = "Chargement des données...";
+                statusElement.className = "";
+
+                const response = await fetch(fileUrl);
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP ${response.status}: Fichier non trouvé.`);
+                }
+
+                const data = await response.json();
+
+                // Transformer les données GeoJSON en tableau d'objets simplifiés
+                allEarthquakes = data.features.map(feature => {
+                    const coords = feature.geometry.coordinates;
+                    const props = feature.properties;
+                    const date = new Date(props.time).toISOString().split('T')[0];
+                    return {
+                        date: date,
+                        mag: props.mag,
+                        location: props.place,
+                        lat: coords[1],
+                        lon: coords[0],
+                        depth: coords[2] || props.depth,
+                        continent: getContinent(coords[1], coords[0])
+                    };
+                });
+
+                // Afficher tous les séismes par défaut
+                displayEarthquakes(allEarthquakes);
+
+            } catch (error) {
+                console.error("Erreur complète :", error);
+                statusElement.textContent = `Erreur : ${error.message}`;
+                statusElement.className = "error";
+            }
+        }
+
+        // Charger les données au démarrage
+        window.onload = loadEarthquakeData;
+    </script>
+</body>
+</html>
